@@ -2,6 +2,16 @@
 
 A modern, web-based LaTeX editor alternative to Overleaf, built with Flask and featuring real-time PDF preview, SyncTeX integration, and comprehensive project management.
 
+## Screenshots
+
+![Home Page](docs/screenshots/home-view.png)
+
+*Home page showing project list with create, upload, and directory options*
+
+![Project View](docs/screenshots/project-view.png)
+
+*Project view showing file explorer (left), LaTeX editor (center), PDF preview (right), and compilation log panel*
+
 ## Features
 
 ### 📁 Project Management

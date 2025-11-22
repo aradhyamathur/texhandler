@@ -523,6 +523,30 @@ body {
     align-items: center;
 }
 
+.pdf-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pdf-zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    background: #3e3e3e;
+    border: 1px solid #4e4e4e;
+    border-radius: 4px;
+}
+
+.pdf-zoom-level {
+    color: #d4d4d4;
+    font-size: 12px;
+    min-width: 45px;
+    text-align: center;
+    user-select: none;
+}
+
 .pdf-header h3 {
     font-size: 16px;
     color: #cccccc;
@@ -531,10 +555,26 @@ body {
 .pdf-viewer {
     flex: 1;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: auto; /* Enable horizontal scrolling when zoomed */
     padding: 0;
     display: block;
     background: #525252;
+}
+
+.textLayer {
+    color: transparent;
+    cursor: text;
+}
+
+.textLayer span {
+    position: absolute;
+    white-space: pre;
+    color: transparent;
+    cursor: text;
+}
+
+.textLayer span::selection {
+    background: rgba(0, 120, 215, 0.35);
 }
 
 #pdfContainer {
@@ -554,8 +594,6 @@ body {
 
 .pdf-page-canvas {
     display: block;
-    max-width: 100%;
-    height: auto;
     pointer-events: none; /* Allow clicks to pass through to text layer */
     position: relative;
     z-index: 1;
