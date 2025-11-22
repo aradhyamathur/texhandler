@@ -399,40 +399,64 @@ body {
     color: #ffffff;
 }
 
-.editor-header {
-    padding: 10px 15px;
-    background: #2d2d2d;
-    border-bottom: 1px solid #3e3e3e;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.editor-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.autosave-label {
+.editor-search-container {
     display: flex;
     align-items: center;
     gap: 5px;
-    cursor: pointer;
-    color: #cccccc;
+    padding: 4px 8px;
+    background: #3e3e3e;
+    border: 1px solid #4e4e4e;
+    border-radius: 4px;
+}
+
+.editor-search-input {
+    padding: 4px 8px;
+    background: #252526;
+    border: 1px solid #3e3e3e;
+    border-radius: 3px;
+    color: #d4d4d4;
     font-size: 13px;
-    user-select: none;
+    width: 200px;
+    outline: none;
 }
 
-.autosave-label input[type="checkbox"] {
-    cursor: pointer;
-    width: 16px;
-    height: 16px;
-    accent-color: #4ec9b0;
+.editor-search-input:focus {
+    border-color: #4ec9b0;
+    background: #2d2d2d;
 }
 
-.autosave-label:hover {
+.editor-search-results {
+    color: #808080;
+    font-size: 12px;
+    min-width: 60px;
+    text-align: center;
+}
+
+.editor-search-container .btn-toggle {
+    background: #3e3e3e;
+    color: #d4d4d4;
+    border: 1px solid #4e4e4e;
+    padding: 4px 8px;
+    font-size: 12px;
+    min-width: 32px;
+}
+
+.editor-search-container .btn-toggle:hover {
+    background: #4e4e4e;
+    border-color: #5e5e5e;
     color: #ffffff;
+}
+
+.editor-search-container .btn-toggle.active {
+    background: #4ec9b0;
+    color: #1e1e1e;
+    border-color: #4ec9b0;
+    font-weight: bold;
+}
+
+.editor-search-container .btn-toggle.active:hover {
+    background: #6ed4c0;
+    border-color: #6ed4c0;
 }
 
 .editor {
@@ -726,6 +750,19 @@ li.CodeMirror-hint-active,
 
 .CodeMirror-linebackground.highlight-line {
     background: rgba(255, 255, 0, 0.2) !important;
+}
+
+/* Search highlights */
+.search-highlight {
+    background-color: rgba(255, 255, 0, 0.3) !important;
+    border: 1px solid rgba(255, 255, 0, 0.5) !important;
+    border-radius: 2px;
+}
+
+.search-highlight-current {
+    background-color: rgba(255, 255, 0, 0.6) !important;
+    border: 2px solid rgba(255, 255, 0, 0.8) !important;
+    border-radius: 2px;
 }
 
 /* Log Panel */

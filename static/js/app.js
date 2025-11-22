@@ -7,6 +7,12 @@ let isImageFile = false;
 let lastFocusedElement = null; // Track last focused element (editor or PDF)
 let pdfSearchActive = false;
 let editorSearchActive = false;
+let editorSearchQuery = '';
+let editorSearchResults = [];
+let currentSearchIndex = -1;
+let searchMarkers = [];
+let editorSearchCaseSensitive = false;
+let editorSearchRegexMode = false;
 let autosaveEnabled = false;
 let autosaveTimeout = null;
 
@@ -177,11 +183,17 @@ function initEditor() {
         autofocus: true,
         extraKeys: {
             'Ctrl-Space': 'autocomplete',
-            'Ctrl-F': function(cm) {
-                // Open search dialog
-                CodeMirror.commands.find(cm);
-                editorSearchActive = true;
+            'Ctrl-F': function(cm, event) {
+                // Prevent default browser find dialog
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                // Toggle search dialog
+                console.log('CodeMirror Ctrl-F handler called');
+                toggleEditorSearch(cm);
                 lastFocusedElement = 'editor';
+                return false; // Return false to stop propagation
             },
             'Tab': function(cm) {
                 // Try LaTeX autocomplete first, fall back to default
@@ -199,6 +211,23 @@ function initEditor() {
             alignWithWord: true
         }
     });
+    
+    // Override CodeMirror's default find command to use our custom search
+    if (CodeMirror.commands && CodeMirror.commands.find) {
+        // Override it to use our custom search
+        CodeMirror.commands.find = function(cm) {
+            console.log('CodeMirror find command called, using custom search');
+            toggleEditorSearch(cm);
+            return false; // Prevent default behavior
+        };
+    }
+    
+    // Initialize search state - ensure search container is hidden on editor init
+    const searchContainer = document.getElementById('editorSearchContainer');
+    if (searchContainer) {
+        searchContainer.style.display = 'none';
+        editorSearchActive = false;
+    }
     
     // Enable autocomplete on backslash
     editor.on('inputRead', function(cm, change) {
@@ -309,6 +338,332 @@ function initEditor() {
             clickCount = 0;
         }, 400);
     });
+}
+
+// Toggle editor search dialog
+function toggleEditorSearch(cm) {
+    const searchContainer = document.getElementById('editorSearchContainer');
+    const searchInput = document.getElementById('editorSearchInput');
+    
+    if (!searchContainer || !searchInput) {
+        console.error('Search container or input not found');
+        return;
+    }
+    
+    // Check if search is currently visible - check computed style as source of truth
+    const inlineDisplay = searchContainer.style.display || '';
+    const computedStyle = window.getComputedStyle(searchContainer);
+    const computedDisplay = computedStyle.display;
+    const computedVisibility = computedStyle.visibility;
+    const computedOpacity = computedStyle.opacity;
+    const rect = searchContainer.getBoundingClientRect();
+    
+    // Element is actually visible only if:
+    // 1. Computed display is not 'none'
+    // 2. Visibility is not 'hidden'
+    // 3. Opacity is not 0
+    // 4. Has a visible bounding box (width/height > 0)
+    const isActuallyVisible = computedDisplay !== 'none' && 
+                               computedVisibility !== 'hidden' && 
+                               parseFloat(computedOpacity) > 0 &&
+                               rect.width > 0 && 
+                               rect.height > 0;
+    
+    console.log('toggleEditorSearch called, inlineDisplay:', inlineDisplay, 'computedDisplay:', computedDisplay, 'computedVisibility:', computedVisibility, 'computedOpacity:', computedOpacity, 'rect:', rect, 'isActuallyVisible:', isActuallyVisible);
+    
+    // Check if editor panel is visible
+    const editorPanel = document.getElementById('editorPanel');
+    const editorPanelVisible = editorPanel && window.getComputedStyle(editorPanel).display !== 'none';
+    console.log('Editor panel visible:', editorPanelVisible);
+    
+    // Use actual visibility check instead of inline style
+    if (isActuallyVisible && editorPanelVisible) {
+        // Close search - it's currently visible
+        console.log('Closing search');
+        closeEditorSearch();
+    } else {
+        // Open search - it's currently hidden
+        console.log('Opening search');
+        // Ensure editor panel is visible first
+        if (!editorPanelVisible) {
+            console.warn('Editor panel is not visible, search may not show');
+        }
+        
+        // Force the display property
+        searchContainer.style.display = 'flex';
+        searchContainer.style.visibility = 'visible';
+        searchContainer.style.opacity = '1';
+        searchInput.value = editorSearchQuery || '';
+        editorSearchActive = true;
+        
+        // Update toggle button states
+        const caseBtn = document.getElementById('editorSearchCaseBtn');
+        const regexBtn = document.getElementById('editorSearchRegexBtn');
+        if (caseBtn) {
+            caseBtn.classList.toggle('active', editorSearchCaseSensitive);
+        }
+        if (regexBtn) {
+            regexBtn.classList.toggle('active', editorSearchRegexMode);
+        }
+        
+        // Verify it's actually visible after setting
+        setTimeout(() => {
+            const finalComputed = window.getComputedStyle(searchContainer);
+            const finalRect = searchContainer.getBoundingClientRect();
+            const parentComputed = window.getComputedStyle(searchContainer.parentElement);
+            const editorPanelComputed = editorPanel ? window.getComputedStyle(editorPanel) : null;
+            
+            console.log('After opening - computed display:', finalComputed.display, 'visibility:', finalComputed.visibility, 'opacity:', finalComputed.opacity);
+            console.log('After opening - bounding rect:', finalRect);
+            console.log('After opening - parent (editor-actions) display:', parentComputed.display);
+            console.log('After opening - editor panel display:', editorPanelComputed ? editorPanelComputed.display : 'N/A');
+            
+            // Check if it's actually visible
+            const isNowVisible = finalComputed.display !== 'none' && 
+                                finalComputed.visibility !== 'hidden' && 
+                                parseFloat(finalComputed.opacity) > 0 &&
+                                finalRect.width > 0 && 
+                                finalRect.height > 0;
+            
+            if (isNowVisible) {
+                searchInput.focus();
+                searchInput.select();
+                console.log('Search container is now visible, input focused');
+            } else {
+                console.error('Search container is not visible after setting display:flex. Parent might be hidden.');
+                // Try to ensure parent containers are visible
+                if (editorPanel && editorPanelComputed && editorPanelComputed.display === 'none') {
+                    console.warn('Editor panel is hidden, making it visible');
+                    editorPanel.style.display = 'flex';
+                }
+                // Retry after a short delay
+                setTimeout(() => {
+                    searchContainer.style.display = 'flex';
+                    searchInput.focus();
+                    searchInput.select();
+                }, 100);
+            }
+        }, 50);
+        
+        // If there's existing query, search immediately
+        if (editorSearchQuery) {
+            performEditorSearch(editorSearchQuery);
+        }
+    }
+}
+
+// Close editor search and clear highlights
+function closeEditorSearch() {
+    const searchContainer = document.getElementById('editorSearchContainer');
+    const searchInput = document.getElementById('editorSearchInput');
+    
+    if (searchContainer) {
+        searchContainer.style.display = 'none';
+    }
+    
+    editorSearchActive = false;
+    // Keep the query for next time user opens search
+    // editorSearchQuery = '';
+    editorSearchResults = [];
+    currentSearchIndex = -1;
+    
+    // Clear all search highlights
+    clearEditorSearchHighlights();
+    
+    // Update results display
+    updateEditorSearchResults();
+    
+    // Focus back to editor after a short delay to ensure DOM updates complete
+    setTimeout(() => {
+        if (editor) {
+            editor.focus();
+            lastFocusedElement = 'editor';
+        }
+    }, 10);
+}
+
+// Clear search highlights
+function clearEditorSearchHighlights() {
+    if (!editor) return;
+    
+    // Clear current search marker
+    if (window.currentSearchMarker) {
+        try {
+            window.currentSearchMarker.clear();
+        } catch (e) {
+            // Marker might already be cleared
+        }
+        window.currentSearchMarker = null;
+    }
+    
+    // Clear all search markers
+    searchMarkers.forEach(marker => {
+        try {
+            marker.clear();
+        } catch (e) {
+            // Marker might already be cleared
+        }
+    });
+    searchMarkers = [];
+}
+
+// Perform search in editor
+function performEditorSearch(query) {
+    if (!editor || !query || !query.trim()) {
+        clearEditorSearchHighlights();
+        editorSearchResults = [];
+        currentSearchIndex = -1;
+        updateEditorSearchResults();
+        return;
+    }
+    
+    editorSearchQuery = query;
+    editorSearchResults = [];
+    currentSearchIndex = -1;
+    
+    // Clear previous highlights
+    clearEditorSearchHighlights();
+    
+    const searchText = query.trim();
+    const content = editor.getValue();
+    const lines = content.split('\n');
+    
+    // Find all occurrences
+    let regex;
+    try {
+        if (editorSearchRegexMode) {
+            // Use as regex pattern
+            const flags = editorSearchCaseSensitive ? 'g' : 'gi';
+            regex = new RegExp(searchText, flags);
+        } else {
+            // Escape regex special characters for plain text search
+            const escapedText = escapeRegex(searchText);
+            const flags = editorSearchCaseSensitive ? 'g' : 'gi';
+            regex = new RegExp(escapedText, flags);
+        }
+    } catch (e) {
+        // Invalid regex, fall back to plain text search
+        console.warn('Invalid regex pattern:', e.message);
+        const escapedText = searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const flags = editorSearchCaseSensitive ? 'g' : 'gi';
+        regex = new RegExp(escapedText, flags);
+    }
+    
+    lines.forEach((line, lineNum) => {
+        let match;
+        while ((match = regex.exec(line)) !== null) {
+            editorSearchResults.push({
+                line: lineNum,
+                ch: match.index,
+                length: match[0].length
+            });
+        }
+    });
+    
+    // Highlight all matches
+    editorSearchResults.forEach((result, index) => {
+        try {
+            const marker = editor.markText(
+                CodeMirror.Pos(result.line, result.ch),
+                CodeMirror.Pos(result.line, result.ch + result.length),
+                {
+                    className: 'search-highlight',
+                    css: 'background-color: rgba(255, 255, 0, 0.3); border: 1px solid rgba(255, 255, 0, 0.5);'
+                }
+            );
+            searchMarkers.push(marker);
+        } catch (e) {
+            console.error('Error marking search result:', e);
+        }
+    });
+    
+    // Don't automatically navigate to first result when typing - only when user clicks next/prev
+    // This prevents focus from being stolen from search input
+    if (editorSearchResults.length > 0) {
+        currentSearchIndex = 0;
+        // Just highlight the first result without focusing editor
+        const firstResult = editorSearchResults[0];
+        if (firstResult && editor) {
+            editor.setCursor(firstResult.line, firstResult.ch);
+            editor.scrollIntoView({ line: firstResult.line, ch: firstResult.ch }, 100);
+            // Don't call editor.focus() here - keep focus on search input
+        }
+    }
+    
+    updateEditorSearchResults();
+}
+
+// Navigate to next/previous search result
+function navigateEditorSearch(direction) {
+    if (editorSearchResults.length === 0) return;
+    
+    if (direction > 0) {
+        // Next
+        currentSearchIndex = (currentSearchIndex + 1) % editorSearchResults.length;
+    } else {
+        // Previous
+        currentSearchIndex = currentSearchIndex - 1;
+        if (currentSearchIndex < 0) {
+            currentSearchIndex = editorSearchResults.length - 1;
+        }
+    }
+    
+    const result = editorSearchResults[currentSearchIndex];
+    if (result) {
+        // Clear previous current marker
+        if (window.currentSearchMarker) {
+            try {
+                window.currentSearchMarker.clear();
+            } catch (e) {
+                // Marker might already be cleared
+            }
+            window.currentSearchMarker = null;
+        }
+        
+        // Move cursor to the match
+        editor.setCursor(result.line, result.ch);
+        editor.scrollIntoView({ line: result.line, ch: result.ch }, 100);
+        
+        // Highlight the current match more prominently
+        try {
+            const currentMarker = editor.markText(
+                CodeMirror.Pos(result.line, result.ch),
+                CodeMirror.Pos(result.line, result.ch + result.length),
+                {
+                    className: 'search-highlight-current',
+                    css: 'background-color: rgba(255, 255, 0, 0.6); border: 2px solid rgba(255, 255, 0, 0.8);'
+                }
+            );
+            window.currentSearchMarker = currentMarker;
+        } catch (e) {
+            console.error('Error highlighting current result:', e);
+        }
+        
+        // Don't focus editor when navigating - keep focus on search input
+        // editor.focus(); // Removed to prevent stealing focus from search input
+        updateEditorSearchResults();
+    }
+}
+
+// Update search results display
+function updateEditorSearchResults() {
+    const resultsElement = document.getElementById('editorSearchResults');
+    if (!resultsElement) return;
+    
+    if (editorSearchResults.length === 0) {
+        if (editorSearchQuery) {
+            resultsElement.textContent = 'No results';
+        } else {
+            resultsElement.textContent = '';
+        }
+    } else {
+        resultsElement.textContent = `${currentSearchIndex + 1} of ${editorSearchResults.length}`;
+    }
+}
+
+// Escape regex special characters
+function escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // Format file size
@@ -2054,13 +2409,37 @@ function showStatus(message) {
     document.getElementById('statusMessage').textContent = message;
 }
 
-// Global keyboard shortcuts
+// Global keyboard shortcuts - use capture phase to catch before CodeMirror
 document.addEventListener('keydown', (e) => {
+    // Don't handle if we're typing in an input/textarea (unless it's our search input)
+    const target = e.target;
+    const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+    const isEditorSearchInput = target.id === 'editorSearchInput';
+    
     // Ctrl+F for search
-    if (e.ctrlKey && e.key === 'f' && !e.shiftKey && !e.altKey) {
-        e.preventDefault();
+    if (e.ctrlKey && (e.key === 'f' || e.key === 'F') && !e.shiftKey && !e.altKey) {
+        // If we're in the editor search input, let its handler deal with it
+        if (isEditorSearchInput) {
+            return; // The input's handler will deal with it
+        }
         
+        // Check if we're in CodeMirror editor area
+        const isInCodeMirror = target.closest('.CodeMirror') || target.closest('#editor');
+        
+        // If in editor area, handle editor search
+        if (isInCodeMirror && editor) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            console.log('Global handler: Intercepting Ctrl+F for editor search');
+            toggleEditorSearch(editor);
+            lastFocusedElement = 'editor';
+            return;
+        }
+        
+        // Check for PDF area
         if (lastFocusedElement === 'pdf' || (e.target.closest('#pdfViewer') && !e.target.closest('#editor'))) {
+            e.preventDefault();
             // PDF is focused
             if (!pdfSearchActive) {
                 initPDFSearch();
@@ -2078,19 +2457,27 @@ document.addEventListener('keydown', (e) => {
                 }
             }
         } else {
-            // Editor is focused (default)
-            if (editor) {
-                CodeMirror.commands.find(editor);
-                editorSearchActive = true;
+            // Editor is focused (default) or anywhere else in editor area
+            // Check if we're in the editor container area (but not in a regular input)
+            const isInEditorArea = target.closest('#editor') || target.closest('.CodeMirror') || 
+                                  (!isInput || target.closest('.editor-search-container'));
+            
+            // If we're in editor area or CodeMirror, or if editor exists and we're not in a regular input
+            if (editor && (isInEditorArea || target.closest('.CodeMirror') || (!isInput && !target.closest('#pdfViewer')))) {
+                console.log('Global handler: Opening editor search');
+                toggleEditorSearch(editor);
                 lastFocusedElement = 'editor';
             }
         }
+        return;
     }
     
     // Escape to close search
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' && !isInput) {
         if (pdfSearchActive) {
             closePDFSearch();
+        } else if (editorSearchActive) {
+            closeEditorSearch();
         }
     }
 });
@@ -2272,6 +2659,110 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('saveBtn').addEventListener('click', () => {
         saveFile(false); // Manual save
     });
+    
+    // Editor search controls
+    const editorSearchInput = document.getElementById('editorSearchInput');
+    const editorSearchNextBtn = document.getElementById('editorSearchNextBtn');
+    const editorSearchPrevBtn = document.getElementById('editorSearchPrevBtn');
+    const editorSearchCloseBtn = document.getElementById('editorSearchCloseBtn');
+    const editorSearchCaseBtn = document.getElementById('editorSearchCaseBtn');
+    const editorSearchRegexBtn = document.getElementById('editorSearchRegexBtn');
+    
+    if (editorSearchInput) {
+        editorSearchInput.addEventListener('input', (e) => {
+            // Prevent focus from being stolen - stop all propagation
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            performEditorSearch(e.target.value);
+        });
+        
+        editorSearchInput.addEventListener('keydown', (e) => {
+            // Stop all keydown events from propagating to CodeMirror/editor
+            e.stopPropagation();
+            
+            // Handle Ctrl+F to toggle search (even when input is focused)
+            if (e.ctrlKey && e.key === 'f' && !e.shiftKey && !e.altKey) {
+                e.preventDefault();
+                toggleEditorSearch(editor);
+                return;
+            }
+            
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    navigateEditorSearch(-1); // Previous
+                } else {
+                    navigateEditorSearch(1); // Next
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closeEditorSearch();
+            }
+            // For all other keys, stop propagation so editor doesn't capture them
+        });
+        
+        // Prevent focus loss when clicking in the input
+        editorSearchInput.addEventListener('focus', (e) => {
+            e.stopPropagation();
+            console.log('Search input focused');
+        });
+        
+        editorSearchInput.addEventListener('blur', (e) => {
+            // Only allow blur if we're explicitly closing the search
+            // Otherwise, prevent blur to keep focus on input
+            if (!e.relatedTarget || !e.relatedTarget.closest('.editor-search-container')) {
+                console.log('Search input blur prevented');
+                // Don't allow blur unless we're closing search
+                setTimeout(() => {
+                    if (editorSearchActive && searchContainer.style.display === 'flex') {
+                        editorSearchInput.focus();
+                    }
+                }, 10);
+            }
+        });
+    }
+    
+    if (editorSearchNextBtn) {
+        editorSearchNextBtn.addEventListener('click', () => {
+            navigateEditorSearch(1);
+        });
+    }
+    
+    if (editorSearchPrevBtn) {
+        editorSearchPrevBtn.addEventListener('click', () => {
+            navigateEditorSearch(-1);
+        });
+    }
+    
+    if (editorSearchCloseBtn) {
+        editorSearchCloseBtn.addEventListener('click', () => {
+            closeEditorSearch();
+        });
+    }
+    
+    // Case sensitivity toggle
+    if (editorSearchCaseBtn) {
+        editorSearchCaseBtn.addEventListener('click', () => {
+            editorSearchCaseSensitive = !editorSearchCaseSensitive;
+            editorSearchCaseBtn.classList.toggle('active', editorSearchCaseSensitive);
+            // Re-perform search with new case sensitivity
+            if (editorSearchQuery) {
+                performEditorSearch(editorSearchQuery);
+            }
+        });
+    }
+    
+    // Regex mode toggle
+    if (editorSearchRegexBtn) {
+        editorSearchRegexBtn.addEventListener('click', () => {
+            editorSearchRegexMode = !editorSearchRegexMode;
+            editorSearchRegexBtn.classList.toggle('active', editorSearchRegexMode);
+            // Re-perform search with new regex mode
+            if (editorSearchQuery) {
+                performEditorSearch(editorSearchQuery);
+            }
+        });
+    }
     
     // Autosave checkbox
     document.getElementById('autosaveCheckbox').addEventListener('change', (e) => {

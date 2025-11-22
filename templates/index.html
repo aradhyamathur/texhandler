@@ -64,6 +64,16 @@
                 <div class="editor-header">
                     <span id="currentFile">No file selected</span>
                     <div class="editor-actions">
+                        <!-- Editor Search Bar -->
+                        <div id="editorSearchContainer" class="editor-search-container" style="display: none;">
+                            <input type="text" id="editorSearchInput" class="editor-search-input" placeholder="Search...">
+                            <button id="editorSearchCaseBtn" class="btn btn-small btn-toggle" title="Match Case">Aa</button>
+                            <button id="editorSearchRegexBtn" class="btn btn-small btn-toggle" title="Use Regular Expression">.*</button>
+                            <button id="editorSearchPrevBtn" class="btn btn-small" title="Previous">↑</button>
+                            <button id="editorSearchNextBtn" class="btn btn-small" title="Next">↓</button>
+                            <span id="editorSearchResults" class="editor-search-results"></span>
+                            <button id="editorSearchCloseBtn" class="btn btn-small" title="Close (Esc)">✕</button>
+                        </div>
                         <label class="autosave-label">
                             <input type="checkbox" id="autosaveCheckbox">
                             <span>Autosave</span>
