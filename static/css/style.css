@@ -1,0 +1,608 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* Header */
+.header {
+    background: #2d2d2d;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #3e3e3e;
+}
+
+.header h1 {
+    font-size: 24px;
+    color: #4ec9b0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    color: #4ec9b0;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0;
+    text-decoration: none;
+}
+
+.btn-link:hover {
+    color: #6ed4c0;
+    text-decoration: underline;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+.btn-primary {
+    background: #007acc;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #005a9e;
+}
+
+.btn-secondary {
+    background: #3e3e3e;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #4e4e4e;
+}
+
+.btn-success {
+    background: #4caf50;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #45a049;
+}
+
+.btn-warning {
+    background: #ffc107;
+    color: #212529;
+}
+
+.btn-warning:hover {
+    background: #e0a800;
+    color: #212529;
+}
+
+.btn-small {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.project-select {
+    padding: 8px 12px;
+    background: #3e3e3e;
+    color: white;
+    border: 1px solid #4e4e4e;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* Main Content */
+.main-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* Projects Home View */
+.projects-home {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+    background: #1e1e1e;
+}
+
+.projects-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.projects-home h2 {
+    color: #4ec9b0;
+    margin: 0;
+    font-size: 24px;
+}
+
+.projects-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.project-card {
+    background: #2d2d2d;
+    border: 1px solid #3e3e3e;
+    border-radius: 8px;
+    padding: 20px;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.project-card:hover {
+    border-color: #4ec9b0;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.project-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.project-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: #ffffff;
+    margin: 0;
+}
+
+.project-info {
+    color: #808080;
+    font-size: 12px;
+    margin-bottom: 15px;
+}
+
+.project-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 15px;
+    flex-wrap: wrap;
+}
+
+.project-actions .btn {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 13px;
+    min-width: 80px;
+}
+
+.btn-danger {
+    background: #d32f2f;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #b71c1c;
+}
+
+/* Side Panel */
+.side-panel {
+    width: 250px;
+    background: #252526;
+    border-right: 1px solid #3e3e3e;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.side-panel-header {
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #3e3e3e;
+}
+
+.side-panel h2 {
+    font-size: 16px;
+    color: #cccccc;
+    margin: 0;
+}
+
+.file-tree {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.file-tree.drag-over {
+    background: rgba(78, 201, 176, 0.1);
+    border: 2px dashed #4ec9b0;
+}
+
+.file-item {
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    user-select: none;
+}
+
+.file-item:hover {
+    background: #2a2d2e;
+}
+
+.file-item.active {
+    background: #37373d;
+    color: #ffffff;
+}
+
+.file-item.drag-target {
+    background: rgba(78, 201, 176, 0.2);
+    border: 1px dashed #4ec9b0;
+}
+
+.file-item.directory {
+    font-weight: 500;
+}
+
+.file-icon {
+    width: 16px;
+    height: 16px;
+    display: inline-block;
+}
+
+.file-children {
+    margin-left: 20px;
+    display: none;
+}
+
+.file-item.expanded > .file-children {
+    display: block;
+}
+
+.empty-message {
+    padding: 20px;
+    text-align: center;
+    color: #808080;
+    font-style: italic;
+}
+
+/* Editor Panel */
+.editor-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #1e1e1e;
+    border-right: 1px solid #3e3e3e;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.editor-header {
+    padding: 10px 15px;
+    background: #2d2d2d;
+    border-bottom: 1px solid #3e3e3e;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.editor {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    position: relative;
+}
+
+.CodeMirror {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 100%;
+    font-size: 14px;
+}
+
+.CodeMirror-scroll {
+    height: 100%;
+    overflow: auto !important;
+}
+
+.CodeMirror-sizer {
+    min-height: 100% !important;
+}
+
+.image-viewer {
+    flex: 1;
+    overflow: auto;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    background: #1e1e1e;
+}
+
+.image-viewer img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border: 1px solid #3e3e3e;
+    border-radius: 4px;
+}
+
+/* PDF Panel */
+.pdf-panel {
+    width: 50%;
+    display: flex;
+    flex-direction: column;
+    background: #1e1e1e;
+}
+
+.pdf-header {
+    padding: 10px 15px;
+    background: #2d2d2d;
+    border-bottom: 1px solid #3e3e3e;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pdf-header h3 {
+    font-size: 16px;
+    color: #cccccc;
+}
+
+.pdf-viewer {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0;
+    display: block;
+    background: #525252;
+}
+
+#pdfContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    min-height: 100%;
+}
+
+.pdf-page-container {
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    background: white;
+    position: relative;
+}
+
+.pdf-page-canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    pointer-events: none; /* Allow clicks to pass through to text layer */
+    position: relative;
+    z-index: 1;
+}
+
+.textLayer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    overflow: hidden;
+    opacity: 0.2;
+    line-height: 1.0;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    pointer-events: auto !important;
+    z-index: 2;
+}
+
+.textLayer span {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+    pointer-events: auto;
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+}
+
+.textLayer .highlight {
+    background-color: yellow;
+    color: black;
+    opacity: 1;
+}
+
+.linkLayer {
+    z-index: 3; /* Links should be on top */
+    pointer-events: auto;
+}
+
+.linkLayer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.linkLayer a {
+    position: absolute;
+    font-size: 1em;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.pdf-viewer iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: white;
+}
+
+/* Status Bar */
+.status-bar {
+    background: #007acc;
+    padding: 5px 15px;
+    font-size: 12px;
+    color: white;
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+.modal-content {
+    background-color: #2d2d2d;
+    margin: 15% auto;
+    padding: 30px;
+    border: 1px solid #3e3e3e;
+    border-radius: 8px;
+    width: 400px;
+    color: white;
+}
+
+.modal-content h2 {
+    margin-bottom: 20px;
+    color: #4ec9b0;
+}
+
+.modal-content input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    background: #3e3e3e;
+    border: 1px solid #4e4e4e;
+    border-radius: 4px;
+    color: white;
+    font-size: 14px;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: white;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #424242;
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #4e4e4e;
+}
+
+/* CodeMirror autocomplete hints */
+.CodeMirror-hints {
+    position: absolute;
+    z-index: 10;
+    overflow: hidden;
+    list-style: none;
+    margin: 0;
+    padding: 2px;
+    min-width: 200px;
+    max-height: 20em;
+    overflow-y: auto;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    background: #2d2d2d;
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+}
+
+.CodeMirror-hint {
+    margin: 0;
+    padding: 4px 8px;
+    border-radius: 2px;
+    white-space: pre;
+    cursor: pointer;
+    color: #d4d4d4;
+}
+
+.CodeMirror-hint.latex-command {
+    color: #4ec9b0;
+}
+
+.CodeMirror-hint.latex-environment {
+    color: #ce9178;
+}
+
+li.CodeMirror-hint-active,
+.CodeMirror-hint:hover {
+    background: #264f78;
+    color: #fff;
+}
+
+/* Editor line highlight for SyncTeX */
+.CodeMirror-line.highlight-line {
+    background: rgba(255, 255, 0, 0.2) !important;
+}
+
+.CodeMirror-linebackground.highlight-line {
+    background: rgba(255, 255, 0, 0.2) !important;
+}
+

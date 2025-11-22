@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeXHandler - LaTeX Editor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1><button id="homeBtn" class="btn-link" style="display: none;">← Home</button> TeXHandler</h1>
+            <div class="header-actions">
+                <button id="uploadBtn" class="btn btn-primary">Upload ZIP</button>
+                <button id="openDirBtn" class="btn btn-secondary">Open Directory</button>
+                <select id="projectSelect" class="project-select">
+                    <option value="">Select Project</option>
+                </select>
+                <select id="compileFileSelect" class="project-select" title="Select LaTeX file to compile" style="display: none; max-width: 200px;">
+                    <option value="">Auto-detect</option>
+                </select>
+                <button id="downloadBtn" class="btn btn-secondary" title="Download project as ZIP" style="display: none;">⬇️ Download</button>
+                <button id="compileBtn" class="btn btn-success">Compile</button>
+                <button id="compileCleanBtn" class="btn btn-warning" title="Clean and compile from scratch" style="display: none;">🔄 Clean & Compile</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Projects Home View -->
+            <div id="projectsHome" class="projects-home">
+                <div class="projects-header">
+                    <h2>Your Projects</h2>
+                    <button id="createProjectBtn" class="btn btn-primary">+ Create New Project</button>
+                </div>
+                <div id="projectsList" class="projects-list">
+                    <p class="empty-message">Loading projects...</p>
+                </div>
+            </div>
+
+            <!-- Side Panel - File Explorer -->
+            <aside class="side-panel" id="sidePanel" style="display: none;">
+                <div class="side-panel-header">
+                    <h2>Files</h2>
+                    <button id="uploadFileBtn" class="btn btn-small" title="Upload file to current directory" style="display: none;">📤</button>
+                </div>
+                <div id="fileTree" class="file-tree" data-current-dir="">
+                    <p class="empty-message">No project loaded</p>
+                </div>
+                <input type="file" id="fileUploadInput" multiple style="display: none;">
+            </aside>
+
+            <!-- Editor Panel -->
+            <div class="editor-panel" id="editorPanel" style="display: none;">
+                <div class="editor-header">
+                    <span id="currentFile">No file selected</span>
+                    <button id="saveBtn" class="btn btn-small">Save</button>
+                </div>
+                <div id="editor" class="editor"></div>
+                <div id="imageViewer" class="image-viewer" style="display: none;">
+                    <img id="imageDisplay" src="" alt="Image preview">
+                </div>
+            </div>
+
+            <!-- PDF Viewer Panel -->
+            <div class="pdf-panel" id="pdfPanel" style="display: none;">
+                <div class="pdf-header">
+                    <h3>PDF Preview</h3>
+                    <button id="refreshPdfBtn" class="btn btn-small">Refresh</button>
+                </div>
+                <div id="pdfViewer" class="pdf-viewer">
+                    <p class="empty-message">No PDF available</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <span id="statusMessage">Ready</span>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div id="uploadModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Upload ZIP File</h2>
+            <input type="file" id="fileInput" accept=".zip">
+            <button id="uploadSubmitBtn" class="btn btn-primary">Upload</button>
+        </div>
+    </div>
+
+    <!-- Directory Modal -->
+    <div id="dirModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Open Directory</h2>
+            <input type="text" id="dirInput" placeholder="/path/to/directory">
+            <button id="dirSubmitBtn" class="btn btn-primary">Open</button>
+        </div>
+    </div>
+
+    <!-- Create Project Modal -->
+    <div id="createProjectModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Create New Project</h2>
+            <input type="text" id="projectNameInput" placeholder="Project name">
+            <button id="createProjectSubmitBtn" class="btn btn-primary">Create</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/stex/stex.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/anyword-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/search/search.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/search/searchcursor.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/dialog/dialog.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/dialog/dialog.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
+
