@@ -27,6 +27,16 @@ def allowed_file(filename):
 def index():
     return render_template('index.html')
 
+@app.route('/project/<project_name>')
+def project_page(project_name):
+    """Route for project-specific pages"""
+    # Validate project exists
+    project_path = os.path.join(UPLOAD_FOLDER, project_name)
+    if not os.path.exists(project_path):
+        # Project doesn't exist, redirect to home
+        return render_template('index.html')
+    return render_template('index.html')
+
 @app.route('/favicon.ico')
 def favicon():
     return '', 204  # No content
@@ -308,6 +318,113 @@ def upload_file_to_project(project_name):
     except Exception as e:
         return jsonify({'error': f'Failed to upload file: {str(e)}'}), 500
 
+@app.route('/api/create_file/<project_name>', methods=['POST'])
+def create_file(project_name):
+    """Create a new file in the specified directory or project root"""
+    data = request.json
+    file_name = data.get('name', '').strip()
+    directory = data.get('directory', '').strip()
+    
+    if not file_name:
+        return jsonify({'error': 'File name is required'}), 400
+    
+    # Validate file name (no path traversal)
+    if '/' in file_name or '\\' in file_name or '..' in file_name:
+        return jsonify({'error': 'Invalid file name'}), 400
+    
+    project_path = os.path.join(UPLOAD_FOLDER, project_name)
+    if not os.path.exists(project_path):
+        return jsonify({'error': 'Project not found'}), 404
+    
+    # Determine target directory - check if directory is provided, else use project root
+    if directory:
+        target_path = os.path.join(project_path, directory)
+        # Security check
+        if not os.path.abspath(target_path).startswith(os.path.abspath(project_path)):
+            return jsonify({'error': 'Invalid directory path'}), 400
+        if not os.path.isdir(target_path):
+            return jsonify({'error': 'Target is not a directory'}), 400
+    else:
+        target_path = project_path
+
+    
+    try:
+        file_path = os.path.join(target_path, file_name)
+        # Security check
+        if not os.path.abspath(file_path).startswith(os.path.abspath(project_path)):
+            return jsonify({'error': 'Invalid file path'}), 400
+        
+
+        
+        # Check if file already exists
+        if os.path.exists(file_path):
+            return jsonify({'error': 'File already exists'}), 400
+        
+        # Create the file with empty content
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('')
+        
+        return jsonify({
+            'success': True,
+            'message': 'File created successfully',
+            'path': os.path.relpath(file_path, project_path)
+        })
+    except Exception as e:
+        return jsonify({'error': f'Failed to create file: {str(e)}'}), 500
+
+@app.route('/api/create_folder/<project_name>', methods=['POST'])
+def create_folder(project_name):
+    """Create a new folder in the specified directory or project root"""
+    data = request.json
+    folder_name = data.get('name', '').strip()
+    directory = data.get('directory', '').strip()
+    
+    if not folder_name:
+        return jsonify({'error': 'Folder name is required'}), 400
+    
+    # Validate folder name (no path traversal)
+    if '/' in folder_name or '\\' in folder_name or '..' in folder_name:
+        return jsonify({'error': 'Invalid folder name'}), 400
+    
+    project_path = os.path.join(UPLOAD_FOLDER, project_name)
+    if not os.path.exists(project_path):
+        return jsonify({'error': 'Project not found'}), 404
+    
+    # Determine target directory - check if directory is provided, else use project root
+    if directory:
+        target_path = os.path.join(project_path, directory)
+        # Security check
+        if not os.path.abspath(target_path).startswith(os.path.abspath(project_path)):
+            return jsonify({'error': 'Invalid directory path'}), 400
+        if not os.path.isdir(target_path):
+            return jsonify({'error': 'Target is not a directory'}), 400
+    else:
+        target_path = project_path
+
+    try:
+        folder_path = os.path.join(target_path, folder_name)
+        # Security check
+        if not os.path.abspath(folder_path).startswith(os.path.abspath(project_path)):
+            return jsonify({'error': 'Invalid folder path'}), 400
+        
+
+        
+        # Check if folder already exists
+        if os.path.exists(folder_path):
+            return jsonify({'error': 'Folder already exists'}), 400
+        
+        # Create the folder
+        os.makedirs(folder_path, exist_ok=True)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Folder created successfully',
+            'path': os.path.relpath(folder_path, project_path)
+        })
+    except Exception as e:
+        return jsonify({'error': f'Failed to create folder: {str(e)}'}), 500
+
 @app.route('/api/file/<project_name>/<path:file_path>', methods=['GET'])
 def get_file_or_image(project_name, file_path):
     project_path = os.path.join(UPLOAD_FOLDER, project_name)
@@ -503,6 +620,14 @@ def compile_latex(project_name):
     main_filename = os.path.basename(main_file)
     base_name = os.path.splitext(main_filename)[0]
     
+    # Validate that the file exists and is readable
+    try:
+        file_size = os.path.getsize(main_file)
+        if file_size == 0:
+            return jsonify({'error': f'LaTeX file "{main_filename}" is empty. Please add content before compiling.'}), 400
+    except OSError:
+        return jsonify({'error': 'Cannot read LaTeX file'}), 400
+    
     try:
         compilation_log = []
         
@@ -513,16 +638,24 @@ def compile_latex(project_name):
         try:
             with open(main_file, 'r', encoding='utf-8') as f:
                 tex_content = f.read()
+                if not tex_content.strip():
+                    return jsonify({'error': f'LaTeX file "{main_filename}" appears to be empty or contains only whitespace. Please add valid LaTeX content before compiling.'}), 400
                 # Check for biblatex (modern bibliography system)
                 if '\\usepackage{biblatex}' in tex_content or '\\addbibresource' in tex_content:
                     needs_biber = True
                 # Check for traditional bibtex
                 elif '\\bibliography' in tex_content or '\\bibliographystyle' in tex_content:
                     needs_bibtex = True
-        except:
-            pass
+        except Exception as e:
+            return jsonify({'error': f'Error reading LaTeX file: {str(e)}'}), 400
+        
+        # Ensure compile_dir exists and is absolute
+        compile_dir = os.path.abspath(compile_dir)
         
         # First pdflatex pass - generates .aux file with reference information
+        # Use absolute path for main_file to avoid path issues
+        main_file_abs = os.path.abspath(main_file)
+        
         result1 = subprocess.run(
             ['pdflatex', '-synctex=1', '-interaction=nonstopmode', '-output-directory', compile_dir, '-jobname', base_name, main_filename],
             cwd=compile_dir,
@@ -531,6 +664,35 @@ def compile_latex(project_name):
             timeout=60
         )
         compilation_log.append("=== First pdflatex pass ===\n" + result1.stdout + result1.stderr)
+        
+        # Check if first pass had critical errors - check both stdout and stderr
+        if result1.returncode != 0 or 'Fatal error occurred' in result1.stdout or 'Fatal error occurred' in result1.stderr or 'Emergency stop' in result1.stdout or 'Emergency stop' in result1.stderr:
+            # Try to extract a more specific error message
+            error_msg = 'LaTeX compilation failed with fatal error'
+            
+            # Check for common error patterns
+            output_text = result1.stdout + '\n' + result1.stderr
+            if 'Emergency stop' in output_text:
+                # Try to find context around the error
+                lines = output_text.split('\n')
+                for i, line in enumerate(lines):
+                    if 'Emergency stop' in line:
+                        # Look backwards for error context
+                        context_lines = []
+                        for j in range(max(0, i-3), i):
+                            if lines[j].strip() and not lines[j].strip().startswith('*'):
+                                context_lines.append(lines[j].strip())
+                        if context_lines:
+                            error_msg = f'LaTeX error near: {" ".join(context_lines[-2:])} (Emergency stop)'
+                        else:
+                            error_msg = 'LaTeX compilation failed: Emergency stop (file may be empty or invalid)'
+                        break
+            
+            return jsonify({
+                'success': False,
+                'error': error_msg,
+                'log': '\n'.join(compilation_log)
+            }), 500
         
         # Double-check .aux file for citations (in case source file check missed something)
         aux_file = os.path.join(compile_dir, base_name + '.aux')
@@ -577,6 +739,15 @@ def compile_latex(project_name):
                 compilation_log.append("=== Warning: bibtex not found, skipping bibliography processing ===\n")
             except Exception as e:
                 compilation_log.append(f"=== BibTeX error: {str(e)} ===\n")
+        
+        # Check if first pass had critical errors (non-zero return code usually indicates failure)
+        if result1.returncode != 0 and 'Fatal error occurred' in result1.stderr:
+            # If there's a fatal error, return early with the error message
+            return jsonify({
+                'success': False,
+                'error': 'LaTeX compilation failed with fatal error',
+                'log': '\n'.join(compilation_log)
+            }), 500
         
         # Second pdflatex pass - reads .aux and resolves references
         result2 = subprocess.run(

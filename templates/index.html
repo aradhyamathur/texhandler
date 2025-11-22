@@ -46,19 +46,30 @@
             <aside class="side-panel" id="sidePanel" style="display: none;">
                 <div class="side-panel-header">
                     <h2>Files</h2>
-                    <button id="uploadFileBtn" class="btn btn-small" title="Upload file to current directory" style="display: none;">📤</button>
+                    <div class="file-actions">
+                        <button id="newFileBtn" class="btn btn-small" title="Create new file" style="display: none;">📄</button>
+                        <button id="newFolderBtn" class="btn btn-small" title="Create new folder" style="display: none;">📁</button>
+                        <button id="uploadFileBtn" class="btn btn-small" title="Upload file to current directory" style="display: none;">📤</button>
+                    </div>
                 </div>
                 <div id="fileTree" class="file-tree" data-current-dir="">
                     <p class="empty-message">No project loaded</p>
                 </div>
                 <input type="file" id="fileUploadInput" multiple style="display: none;">
+                <div class="panel-resizer" id="sidePanelResizer"></div>
             </aside>
 
             <!-- Editor Panel -->
             <div class="editor-panel" id="editorPanel" style="display: none;">
                 <div class="editor-header">
                     <span id="currentFile">No file selected</span>
-                    <button id="saveBtn" class="btn btn-small">Save</button>
+                    <div class="editor-actions">
+                        <label class="autosave-label">
+                            <input type="checkbox" id="autosaveCheckbox">
+                            <span>Autosave</span>
+                        </label>
+                        <button id="saveBtn" class="btn btn-small">Save</button>
+                    </div>
                 </div>
                 <div id="editor" class="editor"></div>
                 <div id="imageViewer" class="image-viewer" style="display: none;">
@@ -76,6 +87,20 @@
                     <p class="empty-message">No PDF available</p>
                 </div>
             </div>
+
+            <!-- Compilation Log Panel -->
+            <aside class="log-panel" id="logPanel" style="display: none;">
+                <div class="log-panel-header">
+                    <h2>Compilation Log</h2>
+                    <div class="log-actions">
+                        <button id="toggleLogPanelBtn" class="btn btn-small" title="Toggle panel">◀</button>
+                        <button id="clearLogBtn" class="btn btn-small" title="Clear log">Clear</button>
+                    </div>
+                </div>
+                <div id="logContent" class="log-content">
+                    <p class="empty-message">No compilation log yet</p>
+                </div>
+            </aside>
         </div>
 
         <!-- Status Bar -->
@@ -111,6 +136,26 @@
             <h2>Create New Project</h2>
             <input type="text" id="projectNameInput" placeholder="Project name">
             <button id="createProjectSubmitBtn" class="btn btn-primary">Create</button>
+        </div>
+    </div>
+
+    <!-- Create File Modal -->
+    <div id="createFileModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Create New File</h2>
+            <input type="text" id="fileNameInput" placeholder="File name (e.g., example.tex)">
+            <button id="createFileSubmitBtn" class="btn btn-primary">Create</button>
+        </div>
+    </div>
+
+    <!-- Create Folder Modal -->
+    <div id="createFolderModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Create New Folder</h2>
+            <input type="text" id="folderNameInput" placeholder="Folder name">
+            <button id="createFolderSubmitBtn" class="btn btn-primary">Create</button>
         </div>
     </div>
 

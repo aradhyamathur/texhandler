@@ -7,6 +7,8 @@ let isImageFile = false;
 let lastFocusedElement = null; // Track last focused element (editor or PDF)
 let pdfSearchActive = false;
 let editorSearchActive = false;
+let autosaveEnabled = false;
+let autosaveTimeout = null;
 
 // LaTeX commands and environments for autocomplete
 const latexCommands = [
@@ -234,6 +236,19 @@ function initEditor() {
                 }
             }
         }
+        
+        // Autosave functionality
+        if (autosaveEnabled && currentProject && currentFilePath && !isImageFile) {
+            // Clear existing timeout
+            if (autosaveTimeout) {
+                clearTimeout(autosaveTimeout);
+            }
+            
+            // Debounce autosave - save after 1 second of no changes
+            autosaveTimeout = setTimeout(() => {
+                saveFile(true); // Pass true to indicate autosave (suppress success message)
+            }, 1000);
+        }
     });
     
     // Ensure editor fills the container
@@ -376,7 +391,8 @@ function renderProjectsList(projects) {
         // Add event listeners
         card.querySelector('.project-open-btn').addEventListener('click', (e) => {
             e.stopPropagation();
-            openProject(project.name);
+            // Navigate to project URL
+            window.location.href = `/project/${encodeURIComponent(project.name)}`;
         });
         
         card.querySelector('.project-download-btn').addEventListener('click', (e) => {
@@ -422,7 +438,8 @@ async function createProject(projectName) {
         if (data.success) {
             showStatus('Project created successfully');
             await loadProjects();
-            openProject(data.project_name);
+            // Navigate to project URL
+            window.location.href = `/project/${encodeURIComponent(data.project_name)}`;
         } else {
             showStatus('Error creating project: ' + (data.error || 'Unknown error'));
         }
@@ -466,7 +483,7 @@ async function loadTexFiles(projectName) {
 }
 
 // Open project
-function openProject(projectName) {
+function openProject(projectName, skipHistory = false) {
     currentProject = projectName;
     document.getElementById('projectSelect').value = projectName;
     showEditorView();
@@ -474,6 +491,13 @@ function openProject(projectName) {
     loadTexFiles(projectName);
     updateUploadButton();
     updateDownloadButton();
+    
+    // Update URL without reloading page
+    if (!skipHistory) {
+        const newUrl = `/project/${encodeURIComponent(projectName)}`;
+        window.history.pushState({ project: projectName }, '', newUrl);
+        document.title = `${projectName} - TeXHandler`;
+    }
 }
 
 // Show editor view
@@ -482,16 +506,94 @@ function showEditorView() {
     document.getElementById('sidePanel').style.display = 'flex';
     document.getElementById('editorPanel').style.display = 'flex';
     document.getElementById('pdfPanel').style.display = 'flex';
+    document.getElementById('logPanel').style.display = 'flex';
     document.getElementById('homeBtn').style.display = 'inline';
+    
+    // Load saved panel width
+    loadSidePanelWidth();
+}
+
+// Side panel resizing functionality
+let sidePanelResizing = false;
+let sidePanelStartX = 0;
+let sidePanelStartWidth = 0;
+
+function initSidePanelResizer() {
+    const sidePanel = document.getElementById('sidePanel');
+    const resizer = document.getElementById('sidePanelResizer');
+    
+    if (!resizer || !sidePanel) return;
+    
+    resizer.addEventListener('mousedown', (e) => {
+        sidePanelResizing = true;
+        sidePanelStartX = e.clientX;
+        sidePanelStartWidth = sidePanel.offsetWidth;
+        
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        resizer.classList.add('resizing');
+        
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!sidePanelResizing) return;
+        
+        const deltaX = e.clientX - sidePanelStartX;
+        const newWidth = sidePanelStartWidth + deltaX;
+        const minWidth = 150;
+        const maxWidth = 600;
+        
+        // Clamp width between min and max
+        const clampedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+        sidePanel.style.width = clampedWidth + 'px';
+        
+        // Save to localStorage
+        localStorage.setItem('sidePanelWidth', clampedWidth.toString());
+        
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (sidePanelResizing) {
+            sidePanelResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            resizer.classList.remove('resizing');
+        }
+    });
+}
+
+// Load saved side panel width from localStorage
+function loadSidePanelWidth() {
+    const sidePanel = document.getElementById('sidePanel');
+    if (!sidePanel) return;
+    
+    const savedWidth = localStorage.getItem('sidePanelWidth');
+    if (savedWidth) {
+        const width = parseInt(savedWidth, 10);
+        if (width >= 150 && width <= 600) {
+            sidePanel.style.width = width + 'px';
+        }
+    }
 }
 
 // Show home view
-function showHomeView() {
+function showHomeView(skipHistory = false) {
     document.getElementById('projectsHome').style.display = 'block';
     document.getElementById('sidePanel').style.display = 'none';
     document.getElementById('editorPanel').style.display = 'none';
     document.getElementById('pdfPanel').style.display = 'none';
+    document.getElementById('logPanel').style.display = 'none';
     document.getElementById('homeBtn').style.display = 'none';
+    
+    // Update URL without reloading page
+    if (!skipHistory) {
+        window.history.pushState({ project: null }, '', '/');
+        document.title = 'TeXHandler - LaTeX Editor';
+    }
 }
 
 // Rename project
@@ -579,9 +681,9 @@ async function loadFileTree(projectName) {
         const response = await fetch(`/api/files/${projectName}`);
         const data = await response.json();
         fileTreeData = data.files;
-        currentDirectory = ''; // Reset to root when loading new project
         renderFileTree(data.files);
-        updateUploadButton();
+        // Reset to root when loading new project
+        setUploadTarget('');
     } catch (error) {
         showStatus('Error loading files: ' + error.message);
     }
@@ -620,19 +722,37 @@ function renderFileTree(files, container = null, parentPath = '') {
         
         if (file.type === 'directory') {
             item.classList.add('directory');
+            // Left click - expand/collapse and set as upload target
             item.addEventListener('click', (e) => {
-                e.stopPropagation();
-                item.classList.toggle('expanded');
-                // Update current directory when clicking on directory
-                currentDirectory = file.path;
-                updateUploadButton();
+                if (e.ctrlKey || e.metaKey) {
+                    // Ctrl/Cmd + Click: Select as upload target without expanding
+                    e.stopPropagation();
+                    e.preventDefault();
+                    // Remove highlight from all other folders
+                    document.querySelectorAll('.file-item.directory').forEach(i => i.classList.remove('selected'));
+                    // Add highlight to this folder
+                    item.classList.add('selected');
+                    setUploadTarget(file.path, item);
+                } else {
+                    // Normal click: Expand/collapse and set as upload target
+                    e.stopPropagation();
+                    item.classList.toggle('expanded');
+                    // Remove highlight from all other folders
+                    document.querySelectorAll('.file-item.directory').forEach(i => i.classList.remove('selected'));
+                    // Add highlight to this folder
+                    item.classList.add('selected');
+                    setUploadTarget(file.path, item);
+                }
             });
             
-            // Right-click context menu for directories
+            // Right-click: Set as upload target
             item.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
-                currentDirectory = file.path;
-                updateUploadButton();
+                // Remove highlight from all other folders
+                document.querySelectorAll('.file-item.directory').forEach(i => i.classList.remove('selected'));
+                // Add highlight to this folder
+                item.classList.add('selected');
+                setUploadTarget(file.path, item);
             });
             
             if (file.children && file.children.length > 0) {
@@ -642,13 +762,37 @@ function renderFileTree(files, container = null, parentPath = '') {
                 item.appendChild(children);
             }
         } else {
-            item.addEventListener('click', () => {
-                loadFile(currentProject, file.path);
-                document.querySelectorAll('.file-item').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-                // Set current directory to file's parent
-                currentDirectory = parentPath;
-                updateUploadButton();
+            // Left click - open file
+            item.addEventListener('click', (e) => {
+                if (e.ctrlKey || e.metaKey) {
+                    // Ctrl/Cmd + Click: Set parent directory as upload target without opening file
+                    e.stopPropagation();
+                    e.preventDefault();
+                    setUploadTarget(parentPath, item);
+                } else {
+                    // Normal click: Open file and set parent directory as upload target
+                    loadFile(currentProject, file.path);
+                    document.querySelectorAll('.file-item').forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+                    // Set current directory to file's parent (so uploads go to same directory)
+                    // Also highlight the parent folder if it exists
+                    if (parentPath) {
+                        const parentFolder = document.querySelector(`[data-path="${parentPath}"][data-type="directory"]`);
+                        if (parentFolder) {
+                            // Remove highlight from all other folders
+                            document.querySelectorAll('.file-item.directory').forEach(i => i.classList.remove('selected'));
+                            // Add highlight to parent folder
+                            parentFolder.classList.add('selected');
+                        }
+                    }
+                    setUploadTarget(parentPath);
+                }
+            });
+            
+            // Right-click: Set parent directory as upload target
+            item.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                setUploadTarget(parentPath, item);
             });
         }
         
@@ -656,13 +800,53 @@ function renderFileTree(files, container = null, parentPath = '') {
     });
 }
 
+// Set upload target directory and update UI
+function setUploadTarget(directory, item = null) {
+    // Remove previous upload-target selection (but keep selected class for folders)
+    document.querySelectorAll('.file-item').forEach(i => i.classList.remove('upload-target'));
+    
+    // Set new directory
+    currentDirectory = directory || '';
+    
+    // Highlight the selected item if provided
+    if (item) {
+        item.classList.add('upload-target');
+    } else if (currentDirectory) {
+        // Find and highlight the directory item
+        const targetItem = document.querySelector(`[data-path="${currentDirectory}"][data-type="directory"]`);
+        if (targetItem) {
+            targetItem.classList.add('upload-target');
+        }
+    }
+    
+    updateUploadButton();
+    showStatus(currentDirectory ? `Upload target: ${currentDirectory}` : 'Upload target: root directory');
+}
+
 // Update upload button visibility
 function updateUploadButton() {
     const uploadBtn = document.getElementById('uploadFileBtn');
+    const newFileBtn = document.getElementById('newFileBtn');
+    const newFolderBtn = document.getElementById('newFolderBtn');
     if (currentProject) {
         uploadBtn.style.display = 'block';
+        newFileBtn.style.display = 'block';
+        newFolderBtn.style.display = 'block';
     } else {
         uploadBtn.style.display = 'none';
+        newFileBtn.style.display = 'none';
+        newFolderBtn.style.display = 'none';
+    }
+    
+    // Update tooltip to show current target directory
+    if (currentDirectory) {
+        uploadBtn.title = `Upload file to: ${currentDirectory}`;
+        newFileBtn.title = `Create new file in: ${currentDirectory}`;
+        newFolderBtn.title = `Create new folder in: ${currentDirectory}`;
+    } else {
+        uploadBtn.title = 'Upload file to project root';
+        newFileBtn.title = 'Create new file in project root';
+        newFolderBtn.title = 'Create new folder in project root';
     }
 }
 
@@ -761,14 +945,18 @@ async function loadFile(projectName, filePath) {
 }
 
 // Save file
-async function saveFile() {
+async function saveFile(isAutosave = false) {
     if (!currentProject || !currentFilePath) {
-        showStatus('No file to save');
+        if (!isAutosave) {
+            showStatus('No file to save');
+        }
         return;
     }
     
     if (isImageFile) {
-        showStatus('Cannot save image files');
+        if (!isAutosave) {
+            showStatus('Cannot save image files');
+        }
         return;
     }
     
@@ -784,7 +972,12 @@ async function saveFile() {
         
         const data = await response.json();
         if (data.success) {
-            showStatus('File saved successfully');
+            if (!isAutosave) {
+                showStatus('File saved successfully');
+            } else {
+                // Show a subtle indicator for autosave (optional - can be removed if too distracting)
+                // showStatus('Auto-saved', 500);
+            }
         } else {
             showStatus('Error saving file: ' + (data.error || 'Unknown error'));
         }
@@ -837,9 +1030,93 @@ async function uploadFileToDirectory(files) {
         }
         
         showStatus('Files uploaded successfully');
+        // Refresh file tree to show uploaded files
         await loadFileTree(currentProject);
+        await loadTexFiles(currentProject); // Refresh compile file dropdown
     } catch (error) {
         showStatus('Error uploading files: ' + error.message);
+    }
+}
+
+// Create new file
+async function createNewFile() {
+    if (!currentProject) {
+        showStatus('No project selected');
+        return;
+    }
+    
+    const fileName = document.getElementById('fileNameInput').value.trim();
+    if (!fileName) {
+        showStatus('File name cannot be empty');
+        return;
+    }
+    
+    showStatus('Creating file...');
+    
+    try {
+        const response = await fetch(`/api/create_file/${currentProject}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: fileName,
+                directory: currentDirectory || ''
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            showStatus('File created successfully');
+            await loadFileTree(currentProject);
+            await loadTexFiles(currentProject); // Refresh compile file dropdown
+            // Open the newly created file
+            await loadFile(currentProject, data.path);
+        } else {
+            showStatus('Error creating file: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        showStatus('Error creating file: ' + error.message);
+    }
+}
+
+// Create new folder
+async function createNewFolder() {
+    if (!currentProject) {
+        showStatus('No project selected');
+        return;
+    }
+    
+    const folderName = document.getElementById('folderNameInput').value.trim();
+    if (!folderName) {
+        showStatus('Folder name cannot be empty');
+        return;
+    }
+    
+    showStatus('Creating folder...');
+    
+    try {
+        const response = await fetch(`/api/create_folder/${currentProject}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: folderName,
+                directory: currentDirectory || ''
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            showStatus('Folder created successfully');
+            await loadFileTree(currentProject);
+            await loadTexFiles(currentProject); // Refresh compile file dropdown
+        } else {
+            showStatus('Error creating folder: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        showStatus('Error creating folder: ' + error.message);
     }
 }
 
@@ -886,9 +1163,14 @@ async function compileLaTeX(cleanFirst = false) {
         if (data.success) {
             showStatus('Compilation successful');
             loadPDF(currentProject, data.pdf_path, data.synctex_path);
+            // Display log even on success
+            if (data.log) {
+                displayCompilationLog(data.log, true);
+            }
         } else {
             showStatus('Compilation failed: ' + (data.error || 'Unknown error'));
             if (data.log) {
+                displayCompilationLog(data.log, false);
                 console.error('Compilation log:', data.log);
             }
         }
@@ -902,6 +1184,114 @@ async function compileClean() {
     // Clean and compile uses the same logic as regular compile
     // It will automatically use the selected file from the dropdown
     await compileLaTeX(true);
+}
+
+// Display compilation log in the log panel
+function displayCompilationLog(log, isSuccess) {
+    const logPanel = document.getElementById('logPanel');
+    const logContent = document.getElementById('logContent');
+    
+    // Show the log panel if it's hidden
+    if (logPanel.style.display === 'none') {
+        logPanel.style.display = 'flex';
+        // Make sure PDF panel adjusts
+        const pdfPanel = document.getElementById('pdfPanel');
+        if (pdfPanel && pdfPanel.style.display !== 'none') {
+            // PDF panel will adjust automatically with flex
+        }
+    }
+    
+    // Remove collapsed class to ensure panel is visible
+    logPanel.classList.remove('collapsed');
+    
+    // Format and display the log
+    if (!log || log.trim() === '') {
+        logContent.innerHTML = '<p class="empty-message">No log output</p>';
+        logContent.className = 'log-content';
+        return;
+    }
+    
+    // Parse log sections
+    const lines = log.split('\n');
+    let html = '';
+    let currentSection = '';
+    let inError = false;
+    let inWarning = false;
+    
+    lines.forEach((line, index) => {
+        // Detect sections
+        if (line.includes('===') && line.includes('===')) {
+            if (currentSection) {
+                html += '</div>';
+            }
+            currentSection = line.trim();
+            html += `<div class="log-section"><strong>${escapeHtml(currentSection)}</strong><br>`;
+            inError = false;
+            inWarning = false;
+        } else if (line.toLowerCase().includes('error') || line.includes('!') || line.includes('Fatal')) {
+            if (!currentSection) {
+                html += '<div class="log-section">';
+            }
+            html += `<div class="log-error">${escapeHtml(line)}</div>`;
+            inError = true;
+        } else if (line.toLowerCase().includes('warning') || line.toLowerCase().includes('overfull') || line.toLowerCase().includes('underfull')) {
+            if (!currentSection) {
+                html += '<div class="log-section">';
+            }
+            html += `<div class="log-warning">${escapeHtml(line)}</div>`;
+            inWarning = true;
+        } else {
+            if (currentSection && !currentSection.includes('===')) {
+                html += escapeHtml(line) + '<br>';
+            } else if (line.trim()) {
+                if (!currentSection) {
+                    html += '<div class="log-section">';
+                }
+                html += escapeHtml(line) + '<br>';
+            }
+        }
+    });
+    
+    // Close last section
+    if (currentSection) {
+        html += '</div>';
+    }
+    
+    logContent.innerHTML = html || '<p class="empty-message">No log output</p>';
+    logContent.className = 'log-content' + (isSuccess ? ' success' : ' error');
+    
+    // Auto-scroll to bottom to show latest output
+    logContent.scrollTop = logContent.scrollHeight;
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Toggle log panel collapse
+function toggleLogPanel() {
+    const logPanel = document.getElementById('logPanel');
+    const toggleBtn = document.getElementById('toggleLogPanelBtn');
+    
+    if (logPanel.classList.contains('collapsed')) {
+        logPanel.classList.remove('collapsed');
+        toggleBtn.textContent = '◀';
+        toggleBtn.title = 'Collapse panel';
+    } else {
+        logPanel.classList.add('collapsed');
+        toggleBtn.textContent = '▶';
+        toggleBtn.title = 'Expand panel';
+    }
+}
+
+// Clear compilation log
+function clearCompilationLog() {
+    const logContent = document.getElementById('logContent');
+    logContent.innerHTML = '<p class="empty-message">No compilation log yet</p>';
+    logContent.className = 'log-content';
 }
 
 // Load PDF with PDF.js for click-to-source mapping
@@ -1622,7 +2012,8 @@ async function uploadFile(file) {
         if (data.success) {
             showStatus('Upload successful');
             await loadProjects();
-            openProject(data.project_name);
+            // Navigate to project URL
+            window.location.href = `/project/${encodeURIComponent(data.project_name)}`;
         } else {
             showStatus('Upload failed: ' + (data.error || 'Unknown error'));
         }
@@ -1648,7 +2039,8 @@ async function openDirectory(path) {
         if (data.success) {
             showStatus('Directory opened successfully');
             await loadProjects();
-            openProject(data.project_name);
+            // Navigate to project URL
+            window.location.href = `/project/${encodeURIComponent(data.project_name)}`;
         } else {
             showStatus('Failed to open directory: ' + (data.error || 'Unknown error'));
         }
@@ -1706,6 +2098,7 @@ document.addEventListener('keydown', (e) => {
 // Event listeners
 document.addEventListener('DOMContentLoaded', () => {
     initEditor();
+    initSidePanelResizer();
     loadProjects();
     updateDownloadButton(); // Initialize download button state
     
@@ -1746,9 +2139,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Project select
     document.getElementById('projectSelect').addEventListener('change', async (e) => {
         currentProject = e.target.value;
-        currentDirectory = '';
+        setUploadTarget('');
         if (currentProject) {
-            openProject(currentProject);
+            // Navigate to project URL
+            window.location.href = `/project/${encodeURIComponent(currentProject)}`;
         } else {
             showHomeView();
             document.getElementById('fileTree').innerHTML = '<p class="empty-message">No project loaded</p>';
@@ -1775,15 +2169,128 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('homeBtn').addEventListener('click', () => {
         currentProject = null;
         document.getElementById('projectSelect').value = '';
-        showHomeView();
-        updateUploadButton();
-        updateDownloadButton();
+        // Navigate to home URL
+        window.location.href = '/';
     });
+    
+    // Handle browser back/forward buttons
+    window.addEventListener('popstate', (e) => {
+        if (e.state && e.state.project) {
+            // Opening a project from history
+            openProject(e.state.project, true);
+        } else {
+            // Going back to home
+            currentProject = null;
+            document.getElementById('projectSelect').value = '';
+            showHomeView(true);
+            updateUploadButton();
+            updateDownloadButton();
+        }
+    });
+    
+    // Check URL on page load to restore project state
+    async function loadProjectFromURL() {
+        const path = window.location.pathname;
+        const projectMatch = path.match(/^\/project\/(.+)$/);
+        if (projectMatch) {
+            const projectName = decodeURIComponent(projectMatch[1]);
+            // Load project from URL
+            openProject(projectName, true);
+            
+            // Wait for project to load, then recompile on refresh
+            setTimeout(async () => {
+                if (currentProject === projectName) {
+                    try {
+                        // Always recompile on refresh to ensure latest PDF
+                        showStatus('Auto-compiling on page load...');
+                        await compileLaTeX(false);
+                    } catch (error) {
+                        console.log('Auto-compilation on refresh failed:', error);
+                        // Don't show error to user, just log it
+                    }
+                }
+            }, 1500); // Wait for everything to load
+        } else {
+            // On home page
+            showHomeView(true);
+        }
+    }
+    
+    // Load project from URL on initial page load
+    loadProjectFromURL();
     
     // Upload file button
     document.getElementById('uploadFileBtn').addEventListener('click', () => {
         document.getElementById('fileUploadInput').click();
     });
+    
+    // New file button
+    document.getElementById('newFileBtn').addEventListener('click', () => {
+        document.getElementById('createFileModal').style.display = 'block';
+        document.getElementById('fileNameInput').focus();
+        document.getElementById('fileNameInput').value = '';
+    });
+    
+    // New folder button
+    document.getElementById('newFolderBtn').addEventListener('click', () => {
+        document.getElementById('createFolderModal').style.display = 'block';
+        document.getElementById('folderNameInput').focus();
+        document.getElementById('folderNameInput').value = '';
+    });
+    
+    // Create file modal
+    const createFileModal = document.getElementById('createFileModal');
+    document.getElementById('createFileSubmitBtn').addEventListener('click', () => {
+        createNewFile();
+        createFileModal.style.display = 'none';
+        document.getElementById('fileNameInput').value = '';
+    });
+    
+    // Allow Enter key to submit in create file modal
+    document.getElementById('fileNameInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('createFileSubmitBtn').click();
+        }
+    });
+    
+    // Create folder modal
+    const createFolderModal = document.getElementById('createFolderModal');
+    document.getElementById('createFolderSubmitBtn').addEventListener('click', () => {
+        createNewFolder();
+        createFolderModal.style.display = 'none';
+        document.getElementById('folderNameInput').value = '';
+    });
+    
+    // Allow Enter key to submit in create folder modal
+    document.getElementById('folderNameInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('createFolderSubmitBtn').click();
+        }
+    });
+    
+    // Save button
+    document.getElementById('saveBtn').addEventListener('click', () => {
+        saveFile(false); // Manual save
+    });
+    
+    // Autosave checkbox
+    document.getElementById('autosaveCheckbox').addEventListener('change', (e) => {
+        autosaveEnabled = e.target.checked;
+        // Clear any pending autosave when disabling
+        if (!autosaveEnabled && autosaveTimeout) {
+            clearTimeout(autosaveTimeout);
+            autosaveTimeout = null;
+        }
+        // Save current state to localStorage
+        localStorage.setItem('autosaveEnabled', autosaveEnabled);
+    });
+    
+    // Load autosave preference from localStorage
+    const savedAutosave = localStorage.getItem('autosaveEnabled');
+    if (savedAutosave === 'true') {
+        autosaveEnabled = true;
+        document.getElementById('autosaveCheckbox').checked = true;
+    }
     
     // File upload input
     document.getElementById('fileUploadInput').addEventListener('change', (e) => {
@@ -1831,26 +2338,36 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         e.stopPropagation();
         fileTree.classList.remove('drag-over');
-        if (dragTarget) {
-            dragTarget.classList.remove('drag-target');
-            dragTarget = null;
-        }
         
         const files = Array.from(e.dataTransfer.files);
         if (files.length > 0) {
             // Determine target directory from drop location
             const target = e.target.closest('.file-item');
+            let targetDir = '';
+            let targetItem = null;
+            
             if (target) {
                 if (target.dataset.type === 'directory') {
-                    currentDirectory = target.dataset.path;
-                } else if (target.dataset.dir !== undefined) {
-                    currentDirectory = target.dataset.dir;
+                    // Dropped on a directory - upload to that directory
+                    targetDir = target.dataset.path;
+                    targetItem = target;
+                } else {
+                    // Dropped on a file - upload to its parent directory
+                    targetDir = target.dataset.dir || '';
+                    targetItem = target;
                 }
             } else {
                 // Dropped on empty space, use root
-                currentDirectory = '';
+                targetDir = '';
             }
-            updateUploadButton();
+            
+            setUploadTarget(targetDir, targetItem);
+            
+            if (dragTarget) {
+                dragTarget.classList.remove('drag-target');
+                dragTarget = null;
+            }
+            
             await uploadFileToDirectory(files);
         }
     });
@@ -1867,8 +2384,7 @@ document.addEventListener('DOMContentLoaded', () => {
         e.stopPropagation();
         const files = Array.from(e.dataTransfer.files);
         if (files.length > 0 && !e.target.closest('.file-tree')) {
-            currentDirectory = '';
-            updateUploadButton();
+            setUploadTarget('');
             await uploadFileToDirectory(files);
         }
     });
@@ -1876,6 +2392,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Compile button
     document.getElementById('compileBtn').addEventListener('click', () => compileLaTeX(false));
     document.getElementById('compileCleanBtn').addEventListener('click', compileClean);
+    
+    // Log panel controls
+    document.getElementById('toggleLogPanelBtn').addEventListener('click', toggleLogPanel);
+    document.getElementById('clearLogBtn').addEventListener('click', clearCompilationLog);
     
     // Save button
     document.getElementById('saveBtn').addEventListener('click', saveFile);
@@ -1914,9 +2434,13 @@ document.addEventListener('DOMContentLoaded', () => {
         closeBtn.addEventListener('click', () => {
             const modal = closeBtn.closest('.modal');
             modal.style.display = 'none';
-            // Clear input if it's the create project modal
+            // Clear inputs
             if (modal.id === 'createProjectModal') {
                 document.getElementById('projectNameInput').value = '';
+            } else if (modal.id === 'createFileModal') {
+                document.getElementById('fileNameInput').value = '';
+            } else if (modal.id === 'createFolderModal') {
+                document.getElementById('folderNameInput').value = '';
             }
         });
     });
@@ -1924,6 +2448,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('click', (e) => {
         if (e.target.classList.contains('modal')) {
             e.target.style.display = 'none';
+            // Clear inputs when clicking outside
+            if (e.target.id === 'createFileModal') {
+                document.getElementById('fileNameInput').value = '';
+            } else if (e.target.id === 'createFolderModal') {
+                document.getElementById('folderNameInput').value = '';
+            }
         }
     });
     
