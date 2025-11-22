@@ -1,5 +1,17 @@
-Flask==3.0.0
-flask-cors==4.0.0
-pytest==7.4.3
-pytest-cov==4.1.0
+# Core Flask dependencies (required)
+Flask>=3.0.0
+flask-cors>=4.0.0
+
+# Testing dependencies (optional, for development)
+# Install with: pip install -r requirements.txt
+# Or for production (without tests): pip install Flask flask-cors
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Note: The following are Python standard library modules (no installation needed):
+# - os, shutil, zipfile, subprocess, pathlib, json, gzip, re, tempfile, io
+#
+# External system dependencies (not Python packages):
+# - LaTeX distribution (TeX Live or MiKTeX) with pdflatex, bibtex, biber
+# - synctex command-line tool (usually included with LaTeX distributions)
 
